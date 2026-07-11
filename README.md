@@ -19,14 +19,14 @@ pip install -r requirements.txt
 
 **Scrape jobs:**
 
-Edit the `SEARCHES` list in `main.py` (search terms, locations, sites), then:
+Edit the `SEARCHES` list in `main.py` (search terms, locations, sites), start with:
 
 ```bash
 python main.py
 ```
 
 This creates `jobs.db` automatically on first run and adds any new postings to
-it. Re-running it later only adds jobs you don't already have — duplicates
+it. Re-running it later only adds jobs you don't already have - duplicates
 (matched by URL) are skipped.
 
 **Browse results:**
@@ -50,18 +50,17 @@ python view_jobs.py mark 14 applied
 
 ## Files
 
-| File | Purpose |
 
 | `db.py` | SQLite schema and connection handling. Dedupes on `job_url`. |
 | `scraper.py` | Wraps JobSpy, runs one or more searches with a pause between them. |
 | `main.py` | Defines your searches and runs a scrape from the terminal. |
 | `view_jobs.py` | Command-line browser/filter for saved jobs. |
-| `app.py` | Streamlit web dashboard — same data, browser UI. |
+| `app.py` | Streamlit web dashboard - same data, browser UI. |
 
 ## Database
 
 `jobs.db` is a plain SQLite file, created automatically the first time
-`main.py` or `app.py` runs — no manual setup needed. It always lives in the
+`main.py` or `app.py` runs - no manual setup needed. It always lives in the
 project folder itself, regardless of where you run commands from. You can
 also open it directly with a tool like
 [DB Browser for SQLite](https://sqlitebrowser.org/) if you want to poke
@@ -73,10 +72,10 @@ around outside the app.
   scraping. This project only hits public non-logged-in search results and
   pauses between searches, but frequent/high-volume scraping can still get
   temporarily blocked.
-- "Google Jobs" isn't a separate site to scrape — it's postings aggregated
+- "Google Jobs" isn't a separate site to scrape. It's postings aggregated
   from sites using `schema.org/JobPosting` markup, shown inside Google
   Search. JobSpy handles this via a search phrase (`google_search_term`);
   results can be inconsistent.
-- Keep `results_wanted` and run frequency modest — there's no benefit to
+- Keep `results_wanted` and run frequency modest. There's no benefit to
   scraping more than you'll read, and it lowers your odds of getting blocked.
 
