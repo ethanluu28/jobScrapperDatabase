@@ -1,13 +1,13 @@
 """Local web dashboard for the job tracker. See README.md Step 5.
 
-Once implemented, run with:
+Run with:
     streamlit run app.py
 Opens in your browser at http://localhost:8501
 """
 import pandas as pd
 import streamlit as st
 
-from db import get_conn, init_db, upsert_jobs
+from db import init_db, upsert_jobs, get_jobs, update_job_status, get_metrics
 from scraper import run_searches
 from main import SEARCHES
 
@@ -38,62 +38,27 @@ with st.sidebar:
         st.rerun()
 
 
-# Build filtered query
-query = "SELECT * FROM jobs WHERE 1=1"
-params = []
-
-if keyword:
-    query += " AND (title LIKE ? OR description LIKE ?)"
-    like_term = f"%{keyword}%"
-    params.extend([like_term, like_term])
-
-if company:
-    query += " AND company LIKE ?"
-    params.append(f"%{company}%")
-
-if remote_only:
-    query += " AND is_remote = 1"
-
-if status_filter != "all":
-    query += " AND status = ?"
-    params.append(status_filter)
-
-query += " ORDER BY date_posted DESC LIMIT ?"
-params.append(limit)
-
-# Load database payload into a Pandas DataFrame
-with get_conn() as conn:
-    df = pd.read_sql_query(query, conn, params=params)
+df = get_jobs(
+    keyword=keyword,
+    company=company,
+    remote_only=remote_only,
+    status=status_filter,
+    limit=limit
+)
 
 # Getting Metrics
-with get_conn() as conn:
-    cursor = conn.cursor()
-
-    cursor.execute("SELECT COUNT(*) FROM jobs")
-    totalCount = cursor.fetchone()[0]
-    cursor.execute("SELECT COUNT(*) FROM jobs WHERE status = 'new'")
-    newCount = cursor.fetchone()[0]
-    cursor.execute("SELECT COUNT(*) FROM jobs WHERE status = 'applied'")
-    appliedCount = cursor.fetchone()[0]
+metrics = get_metrics()
 
 # Displaying metrics
 col1, col2, col3 = st.columns(3)
-col1.metric("Total Cached Jobs", totalCount)
-col2.metric("New Openings", newCount)
-col3.metric("Applications Submitted", appliedCount)
+col1.metric("Total Cached Jobs", metrics["total"])
+col2.metric("New Openings", metrics["new"])
+col3.metric("Applications Submitted", metrics["applied"])
 
 
 st.divider()
 
-# ---------- Job list ----------
-# TODO: if df.empty: st.info(...)
-# else: for _, row in df.iterrows():
-#   with st.container(border=True):
-#       render title as a markdown link (row["job_url"]), company/location,
-#       remote/onsite tag, site, date_posted, and a
-#       st.selectbox(..., STATUSES, key=f"status_{row['id']}") for status
-#       -- if the selected value differs from row["status"], UPDATE the db
-#       and call st.rerun()
+# Job list with formating
 if df.empty:
     st.info("No job listings match your current sidebar query parameters.")
 else:
@@ -136,7 +101,6 @@ else:
                 
                 # If the selected value differs from row["status"], UPDATE the db and reload
                 if new_status != row['status']:
-                    with get_conn() as conn:
-                        conn.execute("UPDATE jobs SET status = ? WHERE id = ?", (new_status, row['id']))
+                    update_job_status(row['id'], new_status)
                     st.toast(f"Updated job #{row['id']} to {new_status}!")
                     st.rerun()

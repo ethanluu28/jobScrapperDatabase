@@ -1,4 +1,4 @@
-"""Wraps JobSpy to run one or more searches. See README.md Step 2.
+"""Wraps JobSpy to run one or more searches.
 
 JobSpy scrapes LinkedIn, Indeed, Google, Glassdoor, and ZipRecruiter and
 returns a pandas DataFrame per search: https://github.com/speedyapply/JobSpy

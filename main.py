@@ -1,6 +1,6 @@
 """Run your searches and save results into jobs.db. See README.md Step 3.
 
-Once implemented, run with:
+Run with:
     python main.py
 """
 from db import init_db, upsert_jobs, job_count

@@ -1,6 +1,4 @@
 """SQLite storage layer for scraped job postings.
-
-Fill in the TODOs below. See README.md Step 1 for guidance.
 """
 import sqlite3
 from pathlib import Path
@@ -95,6 +93,62 @@ def upsert_jobs(df):
     return totalInserted
 
 
+def get_jobs(keyword=None, company=None, remote_only=False, status="all", limit=50):
+    # Gets job data from table with filters applied
+    query = "SELECT * FROM jobs WHERE 1=1"
+    params = []
+
+    if keyword:
+        query += " AND (title LIKE ? OR description LIKE ?)"
+        like_term = f"%{keyword}%"
+        params.extend([like_term, like_term])
+
+    if company:
+        query += " AND company LIKE ?"
+        params.append(f"%{company}%")
+
+    if remote_only:
+        query += " AND is_remote = 1"
+
+    if status != "all":
+        query += " AND status = ?"
+        params.append(status)
+
+    query += " ORDER BY date_posted DESC LIMIT ?"
+    params.append(limit)
+
+    with get_conn() as conn:
+        df = pd.read_sql_query(query, conn, params=params)
+
+    return df
+
+def update_job_status(job_id, status):
+    # Updating job metrics
+    with get_conn() as conn:
+        conn.execute(
+            """UPDATE jobs SET status=? WHERE id=?""",
+            (status, job_id)
+        )
+
+def get_metrics():
+    # Getting metrics
+    with get_conn() as conn:
+        cursor = conn.cursor()
+
+        cursor.execute("SELECT COUNT(*) FROM jobs")
+        total = cursor.fetchone()[0]
+
+        cursor.execute("SELECT COUNT(*) FROM jobs WHERE status = 'new'")
+        new = cursor.fetchone()[0]
+
+        cursor.execute("SELECT COUNT(*) FROM jobs WHERE status = 'applied'")
+        applied = cursor.fetchone()[0]
+
+    return {
+        "total": total,
+        "new": new,
+        "applied": applied
+    }
 
 def job_count():
     # Return the total number of rows in the jobs table
