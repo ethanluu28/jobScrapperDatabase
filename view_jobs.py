@@ -19,22 +19,22 @@ def list_jobs(keyword=None, company=None, remote_only=False, status=None, limit=
 
     # Dynamically appending to SQL filter safely
     if keyword:
-        query += " AND (title LIKE ? OR description LIKE ?)"
+        query += " AND (title ILIKE %s OR description ILIKE %s)"
         like_term = f"%{keyword}%"
         params.extend([like_term, like_term])
     
     if company:
-        query += " AND company LIKE ?"
+        query += " AND company ILIKE %s"
         params.append(f"%{company}%")
     
     if remote_only:
-        query += " AND is_remote = 1"
+        query += " AND is_remote = TRUE"
     
     if status:
-        query += " AND status = ?"
+        query += " AND status = %s"
         params.append(status)
     
-    query += " ORDER BY date_posted DESC LIMIT ?"
+    query += " ORDER BY date_posted DESC LIMIT %s"
     params.append(limit)
 
     # Query database with context from params
@@ -62,11 +62,9 @@ def list_jobs(keyword=None, company=None, remote_only=False, status=None, limit=
 
 def mark_status(job_id, status):
     """Update a single job's status column.
-
-    TODO: UPDATE jobs SET status = ? WHERE id = ? via get_conn().
     Check cursor.rowcount to tell the user if no job matched that id.
     """
-    query = "UPDATE jobs SET status = ? WHERE id = ?"
+    query = "UPDATE jobs SET status = %s WHERE id = %s"
 
     with get_conn() as conn:
         cursor = conn.cursor()
@@ -111,6 +109,6 @@ if __name__ == "__main__":
             limit=args.limit
         )
     elif args.cmd == "mark":
-        mark_status(job_id=args.id, status=args.status)
+        mark_status(job_id=args.job_id, status=args.status)
     else:
         parser.print_help()
