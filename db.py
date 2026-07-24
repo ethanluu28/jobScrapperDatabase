@@ -136,13 +136,13 @@ def get_filtered_jobs_count(keyword="", company="", remote_only=False, status="a
     
     # Inject identical user filter selections
     if keyword:
-        query += " AND (title LIKE %s OR description LIKE %s)"
+        query += " AND (title ILIKE %s OR description ILIKE %s)"
         params.extend([f"%{keyword}%", f"%{keyword}%"])
     if company:
-        query += " AND company LIKE %s"
+        query += " AND company ILIKE %s"
         params.append(f"%{company}%")
     if remote_only:
-        query += " AND is_remote = 1"
+        query += " AND is_remote = TRUE"
     if status != "all":
         query += " AND status = %s"
         params.append(status)

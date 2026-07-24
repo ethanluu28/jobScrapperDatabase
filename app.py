@@ -6,6 +6,7 @@ Opens in your browser at http://localhost:8501
 """
 import pandas as pd
 import streamlit as st
+from math import ceil
 
 from db import init_db, upsert_jobs, get_jobs, update_job_status, get_metrics, get_filtered_jobs_count
 from scraper import run_searches
@@ -41,10 +42,10 @@ with st.sidebar:
     if "page" not in st.session_state:
         st.session_state["page"] = 1
 
-    limit = st.slider("Max records to display", min_value=10, max_value=200, value = 50, step = 10)
+    limit = st.slider("Max records to display", min_value=10, max_value=200, value = 50, step = 10, on_change=resetPage)
 
     col1, col2 = st.columns(2)
-    TOTAL_PAGE = (total_records // limit) + 1
+    TOTAL_PAGE = max(1, ceil(total_records / limit))
 
     with col1:
         if st.button("⬅️ Previous", disabled=(st.session_state.page == 1)):
