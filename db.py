@@ -101,8 +101,21 @@ def upsert_jobs(df):
 
 
 def get_jobs(keyword=None, company=None, remote_only=False, status="all", limit=50, offset=0):
+
+    # Gets job rankings to add as param
+    query = """
+    WITH ranked_jobs AS (
+        SELECT *,
+        DENSE_RANK() OVER (
+            PARTITION BY company ORDER BY COALESCE(max_amount, min_amount) DESC NULLS LAST
+        ) AS salary_rank,
+        COUNT(*) OVER (PARTITION BY company) AS total_company_jobs
+        FROM jobs
+    )
+    SELECT * FROM ranked_jobs WHERE 1=1
+    """
+
     # Gets job data from table with filters applied
-    query = "SELECT * FROM jobs WHERE 1=1"
     params = []
 
     if keyword:
@@ -164,18 +177,22 @@ def update_job_status(job_id, status):
 
 
 def get_metrics():
-    # Getting metrics
+    # Getting metrics using aggregate window function
     with get_conn() as conn:
         cursor = conn.cursor()
 
-        cursor.execute("SELECT COUNT(*) FROM jobs")
-        total = cursor.fetchone()[0]
+        query = """
+            SELECT
+                COUNT(*) as totalCount,
+                COUNT(*) FILTER (WHERE status = 'new') as statusCount,
+                COUNT(*) FILTER (WHERE status = 'applied') as appliedCount
+            FROM jobs;
+        """
+        cursor.execute(query)
+        metricData = cursor.fetchone()
 
-        cursor.execute("SELECT COUNT(*) FROM jobs WHERE status = 'new'")
-        new = cursor.fetchone()[0]
+        total, new, applied = metricData if metricData else (0, 0, 0)
 
-        cursor.execute("SELECT COUNT(*) FROM jobs WHERE status = 'applied'")
-        applied = cursor.fetchone()[0]
 
     return {
         "total": total,

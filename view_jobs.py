@@ -9,12 +9,23 @@ Target usage once implemented:
 """
 import argparse
 from db import get_conn
+import pandas as pd
 
 
 def list_jobs(keyword=None, company=None, remote_only=False, status=None, limit=30):
     # Print jobs matching the given filters, newest first.
 
-    query = "SELECT * FROM jobs WHERE 1=1"
+    query = """
+        WITH ranked_jobs AS (
+            SELECT *,
+            DENSE_RANK() OVER (
+                PARTITION BY company ORDER BY COALESCE(max_amount, min_amount) DESC NULLS LAST
+            ) AS salary_rank,
+            COUNT(*) OVER (PARTITION BY company) AS total_company_jobs
+            FROM jobs
+        )
+        SELECT * FROM ranked_jobs WHERE 1=1
+        """
     params = []
 
     # Dynamically appending to SQL filter safely
@@ -48,15 +59,33 @@ def list_jobs(keyword=None, company=None, remote_only=False, status=None, limit=
         return
     
     # Setting up clean output terminal 
-    print(f"\n{'ID':<5} | {'TITLE':<30} | {'COMPANY':<20} | {'STATUS':<10} | {'POSTED'}")
-    print("-" * 85)
+    print(f"\n{'ID':<5} | {'TITLE':<30} | {'SALARY':<20} | {'RANK':<8} | {'COMPANY':<20} | {'STATUS':<10} | {'POSTED'}")    
+    print("-" * 120)
     
     for row in rows:
         # Truncate strings with ellipses to keep rows strictly on a single line
         title = (row["title"][:27] + "...") if row["title"] and len(row["title"]) > 30 else (row["title"] or "")
         company_name = (row["company"][:17] + "...") if row["company"] and len(row["company"]) > 20 else (row["company"] or "")
+        # Format salary
+        min_amt = int(row['min_amount']) if pd.notna(row['min_amount']) else None
+        max_amt = int(row['max_amount']) if pd.notna(row['max_amount']) else None
+        if min_amt and max_amt:
+            salary_str = f"${min_amt:,}-${max_amt:,}"
+        elif min_amt:
+            salary_str = f"${min_amt:,}+"
+        elif max_amt:
+            salary_str = f"Up to ${max_amt:,}"
+        else:
+            salary_str = "Not Listed"
+
+        # Format Rank Column without emojis
+        if pd.notna(row['salary_rank']) and pd.notna(row['total_company_jobs']):
+            rank_str = f"#{int(row['salary_rank'])} out of {int(row['total_company_jobs'])}"
+        else:
+            rank_str = "No Rank"
         
-        print(f"{row['id']:<5} | {title:<30} | {company_name:<20} | {row['status']:<10} | {row['date_posted'] or 'Unknown'}")
+        # Print formatted aligned to header positions
+        print(f"{row['id']:<5} | {title:<30} | {salary_str:<22} | {rank_str:<15} | {company_name:<20} | {row['status']:<10} | {row['date_posted'] or 'Unknown'}")
     print()
 
 

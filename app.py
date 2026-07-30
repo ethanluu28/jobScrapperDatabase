@@ -126,11 +126,34 @@ else:
                 # Metadata line with safety fallbacks
                 comp = row['company'] or "Unknown Company"
                 loc = row['location'] or "Location Unspecified"
+
+                # Check nulls and safely convert to integers up front
+                min_salary = int(row['min_amount']) if pd.notna(row['min_amount']) else None
+                max_salary = int(row['max_amount']) if pd.notna(row['max_amount']) else None
+
+                # Build the salary string cleanly
+                if min_salary and max_salary:
+                    salary = f"💰 Salary: \\${min_salary:,}-\\${max_salary:,} |"
+                elif min_salary:
+                    salary = f"💰 Salary: ${min_salary:,}+ |"
+                elif max_salary:
+                    salary = f"💰 Salary: up to ${max_salary:,} |"
+                else:
+                    salary = ""
+
+                # Build the rank string cleanly reusing min/max variables
+                if min_salary or max_salary:
+                    rank = f"💰 Rank #{int(row['salary_rank'])}"
+                    totalRank = f" out of {int(row['total_company_jobs'])}"
+                else:
+                    rank = "No Salary"
+                    totalRank = ""
+
                 remote_tag = "🌐 Remote" if row['is_remote'] else "🏢 Onsite/Hybrid"
                 site_source = (row['site'] or "Direct").upper()
                 posted_time = row['date_posted'] or "Unknown date"
                 
-                st.markdown(f"**{comp}** | {loc} | {remote_tag} | *Source: {site_source}* | *Posted: {posted_time}*")
+                st.markdown(f"**{comp}** | {loc} | {salary} {rank}{totalRank} | {remote_tag} | *Source: {site_source}* | *Posted: {posted_time}*")
                 
                 # Optional snippet expander for descriptions
                 if row['description']:
