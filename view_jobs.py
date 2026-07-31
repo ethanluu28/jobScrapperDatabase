@@ -79,7 +79,7 @@ def list_jobs(keyword=None, company=None, remote_only=False, status=None, limit=
             salary_str = "Not Listed"
 
         # Format Rank Column without emojis
-        if pd.notna(row['salary_rank']) and pd.notna(row['total_company_jobs']):
+        if pd.notna(row['min_amount']) or pd.notna(row['max_amount']):
             rank_str = f"#{int(row['salary_rank'])} out of {int(row['total_company_jobs'])}"
         else:
             rank_str = "No Rank"

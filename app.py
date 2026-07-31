@@ -75,7 +75,7 @@ with st.sidebar:
                     dict(
                             search_term=scrape_filter.strip(),
                             location=location_input.strip(),
-                            sites=("indeed", "linkedin", "google"),
+                            sites=("indeed", "google", "linkedin"),
                             results_wanted=int(result_count),
                             hours_old=72
                         )

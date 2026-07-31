@@ -28,6 +28,19 @@ SCHEMA = """
     )
 """
 
+# Index is created for faster queries
+INDEXES = """
+    CREATE EXTENSION IF NOT EXISTS pg_trgm;
+
+    CREATE INDEX IF NOT EXISTS idx_jobs_status ON jobs (status);
+    CREATE INDEX IF NOT EXISTS idx_jobs_remote ON jobs (is_remote);
+    CREATE INDEX IF NOT EXISTS idx_jobs_date_posted ON jobs (date_posted DESC);
+
+    CREATE INDEX IF NOT EXISTS idx_jobs_title_trgm ON jobs USING GIN (title gin_trgm_ops);
+    CREATE INDEX IF NOT EXISTS idx_jobs_description_trgm ON jobs USING GIN (description gin_trgm_ops);
+    CREATE INDEX IF NOT EXISTS idx_jobs_company_trgm ON jobs USING GIN (company gin_trgm_ops);
+"""
+
 
 @contextmanager
 def get_conn():
@@ -58,10 +71,11 @@ def get_conn():
 def init_db():
     # Create the jobs table if it doesn't exist yet
 
+
     with get_conn() as conn:
         cursor = conn.cursor()
         cursor.execute(SCHEMA)
-
+        cursor.execute(INDEXES)
 
 def upsert_jobs(df):
     # Insert new jobs from a JobSpy DataFrame, skipping ones already in the db.
