@@ -2,7 +2,7 @@
 """
 from contextlib import contextmanager
 import pandas as pd
-
+import os
 import psycopg2
 import psycopg2.extras
 
@@ -47,7 +47,7 @@ def get_conn():
     # Yielding postregSQL connection now
 
     conn = psycopg2.connect(
-        host="localhost",
+        host=os.environ.get("DB_HOST", "localhost"),
         port=5432,
         database="jobtracker",
         user="postgres",
