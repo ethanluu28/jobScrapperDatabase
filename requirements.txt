@@ -2,3 +2,6 @@ python-jobspy
 pandas
 streamlit
 psycopg2-binary
+fastapi
+uvicorn
+sqlalchemy
