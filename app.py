@@ -10,13 +10,43 @@ from math import ceil
 
 from db import init_db, upsert_jobs, get_jobs, update_job_status, get_metrics, get_filtered_jobs_count
 from scraper import run_searches
+import requests
 
 def resetPage():
     st.session_state.page = 1
 
+API_URL = "http://localhost:8000/jobs"
 STATUSES = ["new", "viewed", "applied", "rejected", "archived"]
-
 st.set_page_config(page_title="Job Tracker", page_icon="💼", layout="wide")
+
+
+def get_jobs_count_api(
+    status: str | None = None,
+    company: str | None = None,
+    keyword: str | None = None,
+    remote_only: bool = False
+) -> dict:
+
+    query_params = {
+        "status": status,
+        "company": company,
+        "keyword": keyword,
+        "remote_only": remote_only
+    }
+    try:
+        # GET request to API
+        response = requests.get(f"{API_URL}/count")
+        response.raise_for_status()
+
+        return response.json()
+
+
+    except requests.exceptions.RequestException as e:
+        st.error(f"Failed to connect to API Server: {e}")
+        return {"total": 0}
+    
+
+
 init_db()
 
 st.title("💼 Job Tracker")
@@ -34,9 +64,16 @@ with st.sidebar:
     status_filter = st.selectbox("Workflow status", ["all"] + STATUSES, on_change=resetPage)
 
     # Getting direct query count for current filter
-    total_records = get_filtered_jobs_count(
-        keyword=keyword, company=company, remote_only=remote_only, status=status_filter
+    total_records = get_jobs_count_api(
+        status=keyword,
+        company=company,
+        keyword=keyword,
+        remote_only=remote_only
     )
+
+    #total_records = get_filtered_jobs_count(
+    #    keyword=keyword, company=company, remote_only=remote_only, status=status_filter
+    #)
 
     # Safe initialization to track page number
     if "page" not in st.session_state:
