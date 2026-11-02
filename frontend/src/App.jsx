@@ -26,6 +26,17 @@ export default function App() {
       //   jobs needs { ...apiParams, limit, offset: (page - 1) * limit }.
       //   Then call setJobs, setTotal (count.total), setMetrics, and
       //   clear the error with setError(null).
+      const [jobsData, countData, metricsData] = await Promise.all([
+        getJobs({ ...apiParams, limit, offset: (page - 1) * limit }),
+        getCount(apiParams),
+        getMetrics()
+      ]);
+
+      setJobs(jobsData);
+      setTotal(countData.total);
+      setMetrics(metricsData);
+      setError(null);
+
     } catch (e) {
       setError(e.message);
     }
