@@ -8,16 +8,40 @@ import pandas as pd
 import streamlit as st
 from math import ceil
 
-from db import init_db, upsert_jobs, get_jobs, update_job_status, get_metrics, get_filtered_jobs_count
+#from db import init_db, upsert_jobs, get_jobs, update_job_status, get_metrics, get_filtered_jobs_count
 from scraper import run_searches
 import requests
 
-def resetPage():
-    st.session_state.page = 1
 
 API_URL = "http://localhost:8000/jobs"
 STATUSES = ["new", "viewed", "applied", "rejected", "archived"]
 st.set_page_config(page_title="Job Tracker", page_icon="💼", layout="wide")
+
+def api(method, path, timeout=10, **kwargs):
+    try:
+        resp = requests.request(method, f"{API_URL}{path}", timeout=timeout, **kwargs)
+        resp.raise_for_status()
+        return resp.json() if resp.content else None
+    except requests.exceptions.RequestException as e:
+        st.error(f"API request failed: {e}")
+        st.stop()
+
+
+def filter_params(keyword, company, remote_only, status):
+    return {
+        "keyword": keyword or None,
+        "company": company or None,
+        "remote_only": True if remote_only else None,
+        "status": None if status == "all" else status,
+    }
+
+
+def resetPage():
+    st.session_state.page = 1
+
+
+if "page" not in st.session_state:
+    st.session_state.page = 1
 
 
 def get_jobs_count_api(
@@ -47,57 +71,34 @@ def get_jobs_count_api(
     
 
 
-init_db()
-
 st.title("💼 Job Tracker")
 
-# Getting metrics for sidebar
-metrics = get_metrics()
-
-
-# Sidebar: filters and scrape trigger 
 with st.sidebar:
     st.header("Filters")
+    if st.button("🔄 Refresh"):
+        st.rerun()
     keyword = st.text_input("Keyword search (title/desc)", on_change=resetPage)
     company = st.text_input("Company name", on_change=resetPage)
     remote_only = st.checkbox("Remote entries only", on_change=resetPage)
     status_filter = st.selectbox("Workflow status", ["all"] + STATUSES, on_change=resetPage)
 
-    # Getting direct query count for current filter
-    total_records = get_jobs_count_api(
-        status=keyword,
-        company=company,
-        keyword=keyword,
-        remote_only=remote_only
-    )
+    params = filter_params(keyword, company, remote_only, status_filter)
+    total_records = api("GET", "/count", params=params)["total"]
 
-    #total_records = get_filtered_jobs_count(
-    #    keyword=keyword, company=company, remote_only=remote_only, status=status_filter
-    #)
-
-    # Safe initialization to track page number
-    if "page" not in st.session_state:
-        st.session_state["page"] = 1
-
-    limit = st.slider("Max records to display", min_value=10, max_value=200, value = 50, step = 10, on_change=resetPage)
-
-    col1, col2 = st.columns(2)
+    limit = st.slider("Max records to display", 10, 200, 50, 10, on_change=resetPage)
     TOTAL_PAGE = max(1, ceil(total_records / limit))
 
+    col1, col2 = st.columns(2)
     with col1:
         if st.button("⬅️ Previous", disabled=(st.session_state.page == 1)):
             st.session_state.page -= 1
-            st.rerun()  # Forces immediate visual update
-
+            st.rerun()
     with col2:
         if st.button("Next ➡️", disabled=(st.session_state.page == TOTAL_PAGE)):
             st.session_state.page += 1
             st.rerun()
-
-    # Display the current page state
     st.write(f"### Viewing Page {st.session_state.page} of {TOTAL_PAGE}")
 
-    # Creating features
     st.divider()
     st.header("Scrape")
     scrape_filter = st.text_input("Job Search Entry")
@@ -107,111 +108,66 @@ with st.sidebar:
         if not scrape_filter.strip():
             st.error("Error: Job Search Entry cannot be empty!")
         else:
-            with st.spinner("Scraping job boards via Jobspy (using safe timeouts)..."):
-                SEARCHES = [
-                    dict(
-                            search_term=scrape_filter.strip(),
-                            location=location_input.strip(),
-                            sites=("indeed", "google", "linkedin"),
-                            results_wanted=int(result_count),
-                            hours_old=72
-                        )
-                ]
-                df_scraped = run_searches(SEARCHES)
-                newCount = upsert_jobs(df_scraped)
-            st.success(f"Scrape finished! Added {newCount} brand new unique job listings.")
+            with st.spinner("Scraping job boards..."):
+                api("POST", "/scrape", timeout=10, json={
+                    "search_term": scrape_filter.strip(),
+                    "location": location_input.strip(),
+                    "results_wanted": int(result_count),
+                    "hours_old": 72,
+                    "site_name": ["indeed", "linkedin", "google"],
+                })
+            st.toast("Scrape request completed!")
             st.rerun()
 
+offset = (st.session_state.page - 1) * limit
+jobs = api("GET", "/", params={**params, "limit": limit, "offset": offset})
+df = pd.DataFrame(jobs)
 
-offset = (st.session_state["page"] - 1) * limit
-
-df = get_jobs(
-    keyword=keyword,
-    company=company,
-    remote_only=remote_only,
-    status=status_filter,
-    limit=limit,
-    offset=offset
-)
-
-# Getting Metrics
-metrics = get_metrics()
-
-# Displaying metrics
+metrics = api("GET", "/metrics")
 col1, col2, col3 = st.columns(3)
 col1.metric("Total Cached Jobs", metrics["total"])
 col2.metric("New Openings", metrics["new"])
 col3.metric("Applications Submitted", metrics["applied"])
-
-
 st.divider()
 
-# Job list with formating
 if df.empty:
     st.info("No job listings match your current sidebar query parameters.")
 else:
     for _, row in df.iterrows():
-        # Build individual cleanly bounded display cards
         with st.container(border=True):
-            # Layout splitting information from the interactive dropdown controls
             info_col, action_col = st.columns([4, 1])
-            
+
             with info_col:
-                # Make the title clickable
                 st.markdown(f"### [{row['title'] or 'Untitled opening'}]({row['job_url']})")
-                
-                # Metadata line with safety fallbacks
                 comp = row['company'] or "Unknown Company"
                 loc = row['location'] or "Location Unspecified"
 
-                # Check nulls and safely convert to integers up front
                 min_salary = int(row['min_amount']) if pd.notna(row['min_amount']) else None
                 max_salary = int(row['max_amount']) if pd.notna(row['max_amount']) else None
-
-                # Build the salary string cleanly
                 if min_salary and max_salary:
-                    salary = f"💰 Salary: \\${min_salary:,}-\\${max_salary:,} |"
+                    salary = f"💰 \\${min_salary:,}-\\${max_salary:,} |"
                 elif min_salary:
-                    salary = f"💰 Salary: ${min_salary:,}+ |"
+                    salary = f"💰 \\${min_salary:,}+ |"
                 elif max_salary:
-                    salary = f"💰 Salary: up to ${max_salary:,} |"
+                    salary = f"💰 up to \\${max_salary:,} |"
                 else:
                     salary = ""
 
-                # Build the rank string cleanly reusing min/max variables
-                if min_salary or max_salary:
-                    rank = f"💰 Rank #{int(row['salary_rank'])}"
-                    totalRank = f" out of {int(row['total_company_jobs'])}"
-                else:
-                    rank = "No Salary"
-                    totalRank = ""
-
                 remote_tag = "🌐 Remote" if row['is_remote'] else "🏢 Onsite/Hybrid"
                 site_source = (row['site'] or "Direct").upper()
-                posted_time = row['date_posted'] or "Unknown date"
-                
-                st.markdown(f"**{comp}** | {loc} | {salary} {rank}{totalRank} | {remote_tag} | *Source: {site_source}* | *Posted: {posted_time}*")
-                
-                # Optional snippet expander for descriptions
+                posted = row['date_posted'] or "Unknown date"
+                st.markdown(f"**{comp}** | {loc} | {salary} {remote_tag} | *Source: {site_source}* | *Posted: {posted}*")
+
                 if row['description']:
                     with st.expander("Show detailed text summary"):
                         st.write(row['description'])
-            
+
             with action_col:
-                # Safeguard string alignment before indexing layout index variables
-                current_status = row['status'] if row['status'] in STATUSES else "new"
-                status_idx = STATUSES.index(current_status)
-                
-                # Interactive state modifier dropdown
-                new_status = st.selectbox(
-                    "Update Status",
-                    STATUSES,
-                    index=status_idx,
-                    key=f"status_{row['id']}"
-                )
-                
-                # If the selected value differs from row["status"], UPDATE the db and reload
+                current = row['status'] if row['status'] in STATUSES else "new"
+                new_status = st.selectbox("Update Status", STATUSES,
+                                          index=STATUSES.index(current),
+                                          key=f"status_{row['id']}")
                 if new_status != row['status']:
-                    update_job_status(row['id'], new_status)
+                    api("PATCH", f"/{row['id']}", json={"status": new_status})
                     st.toast(f"Updated job #{row['id']} to {new_status}!")
                     st.rerun()
